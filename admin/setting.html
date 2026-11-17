@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setting – Admin SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/app.js"></script>
+</head>
+<body class="invisible">
+  <header id="nav" class="sticky top-0 z-40 bg-cream/80 backdrop-blur border-b border-sand"></header>
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+    <h1 class="text-3xl font-bold">Setting</h1>
+
+    <section class="card">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">Rekening Uang Jaminan</h2>
+        <button class="btn btn-soft" onclick="editBank()"><img src="../assets/icons/edit.png" alt="edit" class="w-4 h-4"></button>
+      </div>
+      <div id="bank"></div>
+    </section>
+
+    <section class="card">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">Layanan</h2>
+        <button class="btn btn-primary" onclick="svcModal()"><img src="../assets/icons/add.png" alt="tambah" class="w-4 h-4"> Tambah</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead><tr><th>Nama</th><th>Harga</th><th>Durasi</th><th>Status</th><th></th></tr></thead>
+          <tbody id="svc"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="text-xl font-bold mb-3">Hari &amp; Jam Operasional</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead><tr><th>Hari</th><th>Jam</th><th></th></tr></thead>
+          <tbody id="hrs"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">Tanggal Libur</h2>
+        <button class="btn btn-primary" onclick="addClosed()"><img src="../assets/icons/add.png" alt="tambah" class="w-4 h-4"> Tambah</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead><tr><th>Tanggal</th><th>Alasan</th><th></th></tr></thead>
+          <tbody id="cls"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    let svcs = [], hrs = [], bankData = {};
+
+    (async () => {
+      await guard('admin');
+      mountNav('admin');
+      loadAll();
+    })();
+
+    function loadAll() { loadBank(); loadSvc(); loadHrs(); loadClosed(); }
+
+    // ── Rekening ──
+    async function loadBank() {
+      const { data } = await sb.from('payment_settings').select('*').single();
+      bankData = data || {};
+      $('#bank').innerHTML = `<p><b>${esc(bankData.bank_name)}</b> ${esc(bankData.account_number)}</p>
+        <p class="text-sm">a.n. ${esc(bankData.account_holder)}</p>
+        <p class="text-sm opacity-70">${esc(bankData.note)}</p>`;
+    }
+    function editBank() {
+      formModal({
+        title: 'Ubah Rekening', values: bankData,
+        fields: [
+          { name: 'bank_name', label: 'Bank' },
+          { name: 'account_number', label: 'Nomor Rekening' },
+          { name: 'account_holder', label: 'Atas Nama' },
+          { name: 'note', label: 'Catatan untuk pelanggan', type: 'textarea' },
+        ],
+        onSubmit: (v) => save(sb.from('payment_settings').update({ ...v, updated_at: new Date().toISOString() }).eq('id', 1), loadBank),
+      });
+    }
+
+    // ── Layanan ──
+    async function loadSvc() {
+      const { data } = await sb.from('services').select('*').order('created_at');
+      svcs = data || [];
+      $('#svc').innerHTML = svcs.map((s) => `<tr>
+        <td class="font-medium td-wrap">${esc(s.name)}</td>
+        <td class="font-mono text-sm">${rupiah(s.price)}</td>
+        <td>${s.duration_minutes} mnt</td>
+        <td><span class="px-2 py-0.5 rounded-full text-xs ${s.is_active ? 'bg-wine/15 text-wine' : 'bg-sand/50 opacity-60'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
+        <td class="td-actions">
+          <button class="btn btn-soft" onclick="svcModal('${s.id}')">${ico('edit')}</button>
+          <button class="btn btn-danger" onclick="delSvc('${s.id}')">${ico('delete')}</button>
+        </td>
+      </tr>`).join('');
+    }
+    function svcModal(id) {
+      const s = svcs.find((x) => x.id === id);
+      formModal({
+        title: s ? 'Ubah Layanan' : 'Tambah Layanan', values: s || { is_active: true },
+        fields: [
+          { name: 'name', label: 'Nama layanan' },
+          { name: 'description', label: 'Deskripsi', type: 'textarea' },
+          { name: 'price', label: 'Harga (Rp)', type: 'number' },
+          { name: 'duration_minutes', label: 'Durasi (menit)', type: 'number' },
+          { name: 'is_active', label: 'Aktif', type: 'checkbox' },
+        ],
+        onSubmit: (v) => save(s ? sb.from('services').update(v).eq('id', id) : sb.from('services').insert(v), loadSvc),
+      });
+    }
+    async function delSvc(id) {
+      if (!confirm('Hapus layanan ini?')) return;
+      const { error } = await sb.from('services').delete().eq('id', id);
+      if (error) return toast('Layanan sudah dipakai booking, nonaktifkan saja', false);
+      loadSvc();
+    }
+
+    // ── Jam Operasional ──
+    async function loadHrs() {
+      const { data } = await sb.from('operating_hours').select('*').order('day_of_week');
+      hrs = data || [];
+      $('#hrs').innerHTML = hrs.map((h) => `<tr>
+        <td class="font-medium">${DAYS[h.day_of_week]}</td>
+        <td>${h.is_open
+          ? `<span class="font-mono text-sm">${hm(h.open_time)} – ${hm(h.close_time)}</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-xs bg-sand/50 opacity-60">Tutup</span>`}
+        </td>
+        <td class="td-actions"><button class="btn btn-soft" onclick="editHrs(${h.day_of_week})">${ico('edit')}</button></td>
+      </tr>`).join('');
+    }
+    function editHrs(d) {
+      const h = hrs.find((x) => x.day_of_week === d);
+      formModal({
+        title: DAYS[d], values: { ...h, open_time: hm(h.open_time), close_time: hm(h.close_time) },
+        fields: [
+          { name: 'is_open', label: 'Buka', type: 'checkbox' },
+          { name: 'open_time', label: 'Jam buka', type: 'time' },
+          { name: 'close_time', label: 'Jam tutup', type: 'time' },
+        ],
+        onSubmit: (v) => save(sb.from('operating_hours').update(v).eq('day_of_week', d), loadHrs),
+      });
+    }
+
+    // ── Tanggal Libur ──
+    async function loadClosed() {
+      const { data } = await sb.from('closed_dates').select('*').gte('closed_date', today()).order('closed_date');
+      $('#cls').innerHTML = (data || []).map((c) => `<tr>
+        <td class="font-medium">${fd(c.closed_date)}</td>
+        <td class="td-wrap opacity-70">${esc(c.reason)}</td>
+        <td class="td-actions"><button class="btn btn-danger" onclick="delClosed('${c.closed_date}')">${ico('delete')}</button></td>
+      </tr>`).join('') || '<tr><td colspan="3" class="py-5 text-center opacity-50 text-sm">Belum ada tanggal libur.</td></tr>';
+    }
+    function addClosed() {
+      formModal({
+        title: 'Tambah Tanggal Libur',
+        fields: [
+          { name: 'closed_date', label: 'Tanggal', type: 'date' },
+          { name: 'reason', label: 'Alasan', required: false },
+        ],
+        onSubmit: (v) => save(sb.from('closed_dates').insert(v), loadClosed),
+      });
+    }
+    function delClosed(d) {
+      if (confirm('Buka kembali tanggal ini?')) save(sb.from('closed_dates').delete().eq('closed_date', d), loadClosed);
+    }
+  </script>
+</body>
+</html>

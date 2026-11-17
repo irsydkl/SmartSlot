@@ -1,0 +1,8 @@
+# Supabase credentials — jangan commit!
+js/env.js
+
+# OS & editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.log

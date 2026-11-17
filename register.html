@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daftar – SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/env.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/app.js"></script>
+</head>
+<body class="invisible min-h-screen flex items-center justify-center p-4">
+  <form id="f" class="card w-full max-w-md space-y-4 p-8">
+    <h1 class="text-3xl font-bold text-center">Buat Akun</h1>
+    <div><label class="label">Nama</label><input name="name" class="input" required></div>
+    <div><label class="label">Nomor HP</label><input name="phone" type="tel" class="input" required></div>
+    <div><label class="label">Email</label><input name="email" type="email" class="input" required></div>
+    <div><label class="label">Password</label><input name="password" type="password" minlength="6" class="input" required></div>
+    <button class="btn btn-primary w-full justify-center">Daftar</button>
+    <p class="text-sm text-center">Sudah punya akun? <a href="login.html" class="underline">Masuk</a></p>
+  </form>
+  <script>
+    guard('guest');
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = Object.fromEntries(new FormData(e.target));
+      const { data, error } = await sb.auth.signUp({
+        email: v.email,
+        password: v.password,
+        options: { data: { name: v.name, phone: v.phone } },
+      });
+      if (error) return toast(error.message, false);
+      if (data.session) location.href = 'customer/dashboard.html';
+      else toast('Pendaftaran berhasil, silakan cek email lalu login');
+    };
+  </script>
+</body>
+</html>

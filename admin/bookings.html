@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking – Admin SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/app.js"></script>
+</head>
+<body class="invisible">
+  <header id="nav" class="sticky top-0 z-40 bg-cream/80 backdrop-blur border-b border-sand"></header>
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+    <section>
+      <h2 class="text-2xl font-bold mb-3">Jadwal Hari Ini</h2>
+      <div class="card overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead><tr><th>Jam</th><th>Pelanggan</th><th>No. HP</th><th>Layanan</th></tr></thead>
+          <tbody id="today"></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <h2 class="text-2xl font-bold">Semua Booking</h2>
+        <select id="filter" class="input !w-auto" onchange="load()">
+          <option value="">Semua status</option>
+          <option value="pending">Menunggu</option>
+          <option value="approved">Disetujui</option>
+          <option value="rejected">Ditolak</option>
+          <option value="cancelled">Dibatalkan</option>
+          <option value="completed">Selesai</option>
+        </select>
+      </div>
+      <div class="card overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead><tr><th>Pelanggan</th><th>Layanan</th><th>Jadwal</th><th>Jaminan</th><th>Status</th><th></th></tr></thead>
+          <tbody id="all"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    const SEL = 'id,booking_date,start_time,end_time,status,admin_note,deposit_amount,deposit_proof_url,profiles(name,phone),services(name)';
+    let rows = [];
+
+    (async () => {
+      await guard('admin');
+      mountNav('admin');
+      load();
+    })();
+
+    async function load() {
+      const f = $('#filter').value;
+      let q = sb.from('bookings').select(SEL).order('booking_date', { ascending: false }).order('start_time');
+      if (f) q = q.eq('status', f);
+      const [t, a] = await Promise.all([
+        sb.from('bookings').select(SEL).eq('booking_date', today()).eq('status', 'approved').order('start_time'),
+        q,
+      ]);
+      $('#today').innerHTML = (t.data || []).map((b) => `<tr>
+        <td><span class="font-mono text-sm">${hm(b.start_time)} – ${hm(b.end_time)}</span></td>
+        <td class="td-wrap font-medium">${esc(b.profiles?.name)}</td>
+        <td class="td-wrap">${esc(b.profiles?.phone)}</td>
+        <td class="td-wrap">${esc(b.services?.name)}</td>
+      </tr>`).join('') || '<tr><td colspan="4" class="py-5 text-center opacity-50 text-sm">Belum ada jadwal hari ini.</td></tr>';
+      rows = a.data || [];
+      $('#all').innerHTML = rows.map((b) => `<tr>
+        <td>
+          <p class="font-medium td-wrap">${esc(b.profiles?.name)}</p>
+          <p class="td-muted">${esc(b.profiles?.phone)}</p>
+        </td>
+        <td class="td-wrap">${esc(b.services?.name)}</td>
+        <td>
+          <p>${fd(b.booking_date)}</p>
+          <p class="td-muted font-mono">${hm(b.start_time)} – ${hm(b.end_time)}</p>
+        </td>
+        <td>
+          <p>${rupiah(b.deposit_amount)}</p>
+          ${b.deposit_proof_url ? `<a href="#" class="underline td-muted" onclick="viewProof('${b.deposit_proof_url}');return false">lihat bukti</a>` : ''}
+        </td>
+        <td>${badge(b.status)}</td>
+        <td class="td-actions">
+          <button class="btn btn-soft" onclick="editRow('${b.id}')">${ico('edit')}</button>
+          <button class="btn btn-danger" onclick="del('${b.id}')">${ico('delete')}</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="6" class="py-5 text-center opacity-50 text-sm">Tidak ada data.</td></tr>';
+    }
+
+    function editRow(id) {
+      const b = rows.find((x) => x.id === id);
+      formModal({
+        title: 'Ubah Booking', values: b,
+        fields: [
+          { name: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS) },
+          { name: 'admin_note', label: 'Catatan admin', type: 'textarea' },
+        ],
+        onSubmit: (v) => save(sb.from('bookings').update(v).eq('id', id), load),
+      });
+    }
+
+    async function del(id) {
+      if (!confirm('Hapus booking ini?')) return;
+      const b = rows.find((x) => x.id === id);
+      const { error } = await sb.from('bookings').delete().eq('id', id);
+      if (error) return toast(error.message, false);
+      if (b.deposit_proof_url) await sb.storage.from('deposit-proofs').remove([b.deposit_proof_url]);
+      load();
+    }
+  </script>
+</body>
+</html>

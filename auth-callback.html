@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memproses...</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/env.js"></script>
+  <script src="js/app.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="min-h-screen flex items-center justify-center">
+  <p id="msg" class="text-center opacity-70">Memproses, harap tunggu…</p>
+  <script>
+    (async () => {
+      // Supabase otomatis parse token dari URL hash/query
+      const { data: { session }, error } = await sb.auth.getSession();
+      if (error || !session) {
+        // Coba exchange code dari URL (email confirm flow)
+        const params = new URLSearchParams(location.search);
+        const code = params.get('code');
+        if (code) {
+          const { error: e2 } = await sb.auth.exchangeCodeForSession(code);
+          if (e2) { document.getElementById('msg').textContent = 'Gagal verifikasi: ' + e2.message; return; }
+        }
+      }
+      // Ambil session terbaru setelah exchange
+      const { data: { session: s2 } } = await sb.auth.getSession();
+      if (!s2) { location.replace('login.html'); return; }
+
+      // Retry profile (trigger DB mungkin belum selesai)
+      let profile = null;
+      for (let i = 0; i < 4; i++) {
+        const { data } = await sb.from('profiles').select('role').eq('id', s2.user.id).maybeSingle();
+        if (data) { profile = data; break; }
+        await new Promise(r => setTimeout(r, 700));
+      }
+      const dest = profile?.role === 'admin' ? 'admin/dashboard.html' : 'customer/dashboard.html';
+      location.replace(dest);
+    })();
+  </script>
+</body>
+</html>

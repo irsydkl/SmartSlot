@@ -1,0 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Poppins:wght@300;400;500;600&display=swap');
+
+:root {
+    --cream: #FEF9F3;
+    --sand: #E7B2B5;
+    --blush: #E7B2B5;
+    --wine: #59624F
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background: var(--cream);
+    color: var(--wine)
+}
+
+h1,
+h2,
+h3,
+.font-display {
+    font-family: 'Playfair Display', serif
+}
+
+.card {
+    background: rgba(255, 255, 255, .55);
+    border: 1px solid var(--sand);
+    border-radius: 1.25rem;
+    padding: 1.25rem
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    border-radius: 9999px;
+    padding: .5rem 1.1rem;
+    font-size: .875rem;
+    font-weight: 500;
+    transition: .2s;
+    cursor: pointer
+}
+
+.btn:hover {
+    opacity: .85
+}
+
+.btn-primary {
+    background: var(--wine);
+    color: var(--cream)
+}
+
+.btn-soft {
+    background: var(--sand);
+    color: var(--wine)
+}
+
+.btn-danger {
+    background: var(--blush);
+    color: var(--wine)
+}
+
+.input {
+    width: 100%;
+    border: 1px solid var(--sand);
+    background: #fff;
+    border-radius: .9rem;
+    padding: .6rem .9rem;
+    font-size: .9rem;
+    outline: none
+}
+
+.input:focus {
+    border-color: var(--wine)
+}
+
+.label {
+    display: block;
+    font-size: .8rem;
+    font-weight: 500;
+    margin-bottom: .25rem
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(89, 98, 79, .55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 50
+}
+
+.modal.hidden {
+    display: none
+}
+
+.modal>div {
+    background: var(--cream);
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 30rem;
+    max-height: 90vh;
+    overflow: auto
+}
+
+/* ── Table ── */
+table {
+    border-collapse: collapse;
+    width: 100%
+}
+
+thead tr {
+    border-bottom: 2px solid var(--sand)
+}
+
+th {
+    font-weight: 600;
+    font-size: .78rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    opacity: .6;
+    padding: .65rem .85rem;
+    white-space: nowrap;
+    text-align: left
+}
+
+td {
+    padding: .75rem .85rem;
+    vertical-align: middle
+}
+
+tbody tr {
+    border-bottom: 1px solid color-mix(in srgb, var(--sand) 55%, transparent);
+    transition: background .15s
+}
+
+tbody tr:last-child {
+    border-bottom: none
+}
+
+tbody tr:hover {
+    background: color-mix(in srgb, var(--sand) 18%, transparent)
+}
+
+.td-wrap {
+    max-width: 14rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis
+}
+
+.td-actions {
+    text-align: right;
+    white-space: nowrap
+}
+
+.td-muted {
+    font-size: .78rem;
+    opacity: .65;
+    margin-top: .15rem
+}

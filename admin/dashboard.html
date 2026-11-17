@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Admin – SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/app.js"></script>
+</head>
+<body class="invisible">
+  <header id="nav" class="sticky top-0 z-40 bg-cream/80 backdrop-blur border-b border-sand"></header>
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+    <h1 class="text-3xl font-bold">Dashboard Admin</h1>
+    <div id="stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4"></div>
+    <section>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-2xl font-bold">Menunggu Persetujuan</h2>
+        <a href="bookings.html" class="text-sm underline">Kelola booking</a>
+      </div>
+      <div id="pending" class="space-y-3"></div>
+    </section>
+  </main>
+  <script>
+    (async () => {
+      const p = await guard('admin');
+      mountNav('admin');
+      const cnt = async (q) => (await q).count;
+      const B = () => sb.from('bookings').select('id', { count: 'exact', head: true });
+      const [pend, tod, tot, cus] = await Promise.all([
+        cnt(B().eq('status', 'pending')),
+        cnt(B().eq('status', 'approved').eq('booking_date', today())),
+        cnt(B()),
+        cnt(sb.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'customer')),
+      ]);
+      $('#stats').innerHTML = [['Menunggu', pend], ['Jadwal Hari Ini', tod], ['Total Booking', tot], ['Pelanggan', cus]]
+        .map(([t, v]) => `<div class="card"><p class="text-sm opacity-70">${t}</p><p class="font-display text-4xl font-bold">${v}</p></div>`).join('');
+      const { data } = await sb.from('bookings').select('*, profiles(name), services(name)')
+        .eq('status', 'pending').order('created_at', { ascending: false }).limit(5);
+      $('#pending').innerHTML = (data || []).map((b) => `
+        <div class="card flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p class="font-semibold">${esc(b.profiles?.name)} &middot; ${esc(b.services?.name)}</p>
+            <p class="text-sm opacity-70">${fd(b.booking_date)} &middot; ${hm(b.start_time)}-${hm(b.end_time)}</p>
+          </div>
+          ${badge(b.status)}
+        </div>`).join('')
+        || '<p class="text-sm opacity-70">Tidak ada booking yang menunggu.</p>';
+    })();
+  </script>
+</body>
+</html>

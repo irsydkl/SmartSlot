@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/env.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/app.js"></script>
+</head>
+<body class="min-h-screen">
+  <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
+    <img class="h-[50px]" src="assets/images/SmartSlot.png" alt="SmartSlot">
+    <div class="flex gap-2">
+      <a href="login.html" class="btn btn-soft">Masuk</a>
+      <a href="register.html" class="btn btn-primary">Daftar</a>
+    </div>
+  </header>
+
+  <section class="max-w-6xl mx-auto px-4 py-8 md:py-8 grid md:grid-cols-2 gap-10 items-center">
+    <div>
+      <p class="text-sm tracking-widest uppercase opacity-70 mb-3">Beauty &amp; Hair Studio</p>
+      <h1 class="text-4xl md:text-6xl font-bold leading-tight mb-5">Tampil anggun, tanpa antre panjang.</h1>
+      <p class="opacity-80 mb-8 max-w-md">Pilih layanan, tentukan jadwal, dan booking online dengan mudah.</p>
+      <a href="register.html" class="btn btn-primary">Booking Sekarang</a>
+    </div>
+    <img src="assets/images/display.jpg" class="rounded-[2rem] bg-sand aspect-[4/3] object-cover" alt="Salon">
+  </section>
+
+  <section class="max-w-6xl mx-auto px-4 py-10">
+    <h2 class="text-3xl font-bold mb-6">Layanan Kami</h2>
+    <div id="services" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-4 py-10">
+    <h2 class="text-3xl font-bold mb-6">Jam Operasional</h2>
+    <div id="hours" class="card grid sm:grid-cols-2 gap-x-10 gap-y-2 text-sm"></div>
+  </section>
+
+  <footer class="text-center text-sm opacity-70 py-8">
+    &copy; SmartSlot &middot; <a href="admin/login.html" class="underline">Admin</a>
+  </footer>
+
+  <script>
+    (async () => {
+      const [s, h] = await Promise.all([
+        sb.from('services').select('*').eq('is_active', true).order('price'),
+        sb.from('operating_hours').select('*'),
+      ]);
+      $('#services').innerHTML = (s.data || []).map((x) => `
+        <div class="card">
+          <h3 class="text-xl font-bold">${esc(x.name)}</h3>
+          <p class="text-sm opacity-80 my-2">${esc(x.description)}</p>
+          <p class="font-semibold">${rupiah(x.price)} <span class="font-normal text-sm opacity-70">&middot; ${x.duration_minutes} menit</span></p>
+        </div>`).join('');
+      // Urutkan Senin → Minggu
+      const hours = (h.data || []).sort((a, b) => ((a.day_of_week + 6) % 7) - ((b.day_of_week + 6) % 7));
+      $('#hours').innerHTML = hours.map((d) => `
+        <div class="flex justify-between">
+          <span>${DAYS[d.day_of_week]}</span>
+          <span>${d.is_open ? hm(d.open_time) + ' - ' + hm(d.close_time) : 'Tutup'}</span>
+        </div>`).join('');
+    })();
+  </script>
+</body>
+</html>

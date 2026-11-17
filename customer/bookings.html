@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Saya – SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/app.js"></script>
+</head>
+<body class="invisible">
+  <header id="nav" class="sticky top-0 z-40 bg-cream/80 backdrop-blur border-b border-sand"></header>
+  <main class="max-w-4xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold">Booking Saya</h1>
+      <button class="btn btn-primary" onclick="add()"><img src="../assets/icons/add.png" alt="tambah" class="w-4 h-4"> Booking Baru</button>
+    </div>
+    <div id="list" class="space-y-3"></div>
+  </main>
+
+  <div id="m" class="modal hidden">
+    <div>
+      <h3 id="mt" class="text-2xl font-bold mb-4">Booking Baru</h3>
+      <form id="f" class="space-y-3">
+        <div><label class="label">Layanan</label><select id="service_id" class="input" required></select></div>
+        <div><label class="label">Tanggal</label><input id="booking_date" type="date" class="input" required></div>
+        <div>
+          <label class="label">Jam</label>
+          <div id="slots" class="flex flex-wrap gap-2"></div>
+          <input type="hidden" id="start_time">
+        </div>
+        <div><label class="label">Catatan (opsional)</label><textarea id="notes" rows="2" class="input"></textarea></div>
+        <div class="card text-sm space-y-1">
+          <p>Uang jaminan (50%): <b id="dep">Rp 0</b></p>
+          <p id="bank_info" class="opacity-80"></p>
+        </div>
+        <div><label class="label">Bukti transfer (screenshot)</label><input id="proof" type="file" accept="image/*" class="input"></div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn btn-soft" onclick="closeModal('m')">Batal</button>
+          <button class="btn btn-primary">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let services = [], bankData = {}, rows = [], editing = null, me;
+
+    (async () => {
+      me = await guard('customer');
+      mountNav('customer');
+      const [s, b] = await Promise.all([
+        sb.from('services').select('*').eq('is_active', true).order('name'),
+        sb.from('payment_settings').select('*').single(),
+      ]);
+      services = s.data || [];
+      bankData = b.data || {};
+      $('#service_id').innerHTML = '<option value="">Pilih layanan</option>' +
+        services.map((x) => `<option value="${x.id}">${esc(x.name)} - ${rupiah(x.price)} (${x.duration_minutes} mnt)</option>`).join('');
+      $('#bank_info').innerHTML = `Transfer ke <b>${esc(bankData.bank_name)} ${esc(bankData.account_number)}</b> a.n. ${esc(bankData.account_holder)}<br>${esc(bankData.note)}`;
+      $('#booking_date').min = today();
+      load();
+    })();
+
+    async function load() {
+      const { data } = await sb.from('bookings').select('*, services(name)').order('booking_date', { ascending: false });
+      rows = data || [];
+      $('#list').innerHTML = rows.map((b) => `
+        <div class="card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p class="font-semibold">${esc(b.services?.name)}</p>
+            <p class="text-sm opacity-70">${fd(b.booking_date)} &middot; ${hm(b.start_time)}-${hm(b.end_time)}</p>
+            <p class="text-sm">Jaminan: ${rupiah(b.deposit_amount)}
+              ${b.deposit_proof_url ? `&middot; <a href="#" class="underline" onclick="viewProof('${b.deposit_proof_url}');return false">lihat bukti</a>` : ''}
+            </p>
+            ${b.admin_note ? `<p class="text-sm italic">Catatan admin: ${esc(b.admin_note)}</p>` : ''}
+          </div>
+          <div class="flex items-center gap-2">
+            ${badge(b.status)}
+            ${b.status === 'pending' ? `
+              <button class="btn btn-soft" onclick="editRow('${b.id}')">${ico('edit')}</button>
+              <button class="btn btn-danger" onclick="del('${b.id}')">${ico('delete')}</button>` : ''}
+          </div>
+        </div>`).join('') || '<p class="opacity-70">Belum ada booking.</p>';
+    }
+
+    function showDep() {
+      const s = services.find((x) => x.id === $('#service_id').value);
+      $('#dep').textContent = rupiah(Math.round((s?.price || 0) * 0.5));
+    }
+
+    async function slots(sel = '') {
+      const box = $('#slots'), date = $('#booking_date').value;
+      const s = services.find((x) => x.id === $('#service_id').value);
+      $('#start_time').value = '';
+      if (!date || !s) { box.innerHTML = '<p class="text-sm opacity-60">Pilih layanan dan tanggal dulu.</p>'; return; }
+      const [c, h, bk] = await Promise.all([
+        sb.from('closed_dates').select('closed_date').eq('closed_date', date).maybeSingle(),
+        sb.from('operating_hours').select('*').eq('day_of_week', new Date(date + 'T00:00').getDay()).single(),
+        sb.rpc('get_booked_slots', { p_date: date, p_exclude: editing?.id ?? null }),
+      ]);
+      if (c.data || !h.data?.is_open) { box.innerHTML = '<p class="text-sm">Salon tutup pada tanggal ini.</p>'; return; }
+      const mins = (t) => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+      const busy = (bk.data || []).map((b) => [mins(b.start_time), mins(b.end_time)]);
+      const nowM = new Date().getHours() * 60 + new Date().getMinutes();
+      let out = '';
+      for (let t = mins(h.data.open_time); t + s.duration_minutes <= mins(h.data.close_time); t += 30) {
+        if (date === today() && t <= nowM) continue;
+        if (busy.some(([a, e]) => t < e && t + s.duration_minutes > a)) continue;
+        const l = String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+        out += `<button type="button" data-t="${l}" class="slot btn ${l === sel ? 'btn-primary' : 'btn-soft'}">${l}</button>`;
+      }
+      box.innerHTML = out || '<p class="text-sm">Tidak ada jam tersedia.</p>';
+      if (sel && out.includes(`data-t="${sel}"`)) $('#start_time').value = sel;
+    }
+
+    $('#service_id').onchange = () => { showDep(); slots(); };
+    $('#booking_date').onchange = () => slots();
+    $('#slots').onclick = (e) => {
+      const btn = e.target.closest('.slot');
+      if (!btn) return;
+      $('#start_time').value = btn.dataset.t;
+      document.querySelectorAll('.slot').forEach((x) => (x.className = 'slot btn btn-soft'));
+      btn.className = 'slot btn btn-primary';
+    };
+
+    function add() {
+      editing = null;
+      $('#mt').textContent = 'Booking Baru';
+      $('#f').reset();
+      $('#start_time').value = '';
+      $('#slots').innerHTML = '<p class="text-sm opacity-60">Pilih layanan dan tanggal dulu.</p>';
+      $('#dep').textContent = rupiah(0);
+      openModal('m');
+    }
+
+    async function editRow(id) {
+      editing = rows.find((x) => x.id === id);
+      $('#mt').textContent = 'Ubah Booking';
+      $('#f').reset();
+      $('#service_id').value = editing.service_id;
+      $('#booking_date').value = editing.booking_date;
+      $('#notes').value = editing.notes || '';
+      showDep();
+      openModal('m');
+      await slots(hm(editing.start_time));
+    }
+
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      if (!$('#start_time').value) return toast('Pilih jam dulu', false);
+      const file = $('#proof').files[0];
+      if (!file && !editing?.deposit_proof_url) return toast('Upload bukti transfer uang jaminan', false);
+      let path = editing?.deposit_proof_url ?? null;
+      if (file) {
+        const np = `${me.id}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`;
+        const up = await sb.storage.from('deposit-proofs').upload(np, file);
+        if (up.error) return toast(up.error.message, false);
+        if (path) await sb.storage.from('deposit-proofs').remove([path]);
+        path = np;
+      }
+      const row = {
+        service_id: $('#service_id').value,
+        booking_date: $('#booking_date').value,
+        start_time: $('#start_time').value,
+        notes: $('#notes').value,
+        deposit_proof_url: path,
+      };
+      const { error } = editing
+        ? await sb.from('bookings').update(row).eq('id', editing.id)
+        : await sb.from('bookings').insert({ ...row, customer_id: me.id });
+      if (error) return toast(error.message, false);
+      toast('Booking tersimpan');
+      closeModal('m');
+      load();
+    };
+
+    async function del(id) {
+      if (!confirm('Hapus booking ini?')) return;
+      const b = rows.find((x) => x.id === id);
+      const { error } = await sb.from('bookings').delete().eq('id', id);
+      if (error) return toast(error.message, false);
+      if (b.deposit_proof_url) await sb.storage.from('deposit-proofs').remove([b.deposit_proof_url]);
+      load();
+    }
+  </script>
+</body>
+</html>
