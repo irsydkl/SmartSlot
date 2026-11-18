@@ -21,19 +21,33 @@
     <p class="text-sm text-center">Sudah punya akun? <a href="login.html" class="underline">Masuk</a></p>
   </form>
   <script>
-    guard('guest');
-    $('#f').onsubmit = async (e) => {
-      e.preventDefault();
-      const v = Object.fromEntries(new FormData(e.target));
-      const { data, error } = await sb.auth.signUp({
-        email: v.email,
-        password: v.password,
-        options: { data: { name: v.name, phone: v.phone } },
-      });
-      if (error) return toast(error.message, false);
-      if (data.session) location.href = 'customer/dashboard.html';
-      else toast('Pendaftaran berhasil, silakan cek email lalu login');
-    };
-  </script>
+  guard('guest');
+  $('#f').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    btn.disabled = true;
+    const v = Object.fromEntries(new FormData(e.target));
+
+    const { data, error } = await sb.auth.signUp({
+      email: v.email.trim(),
+      password: v.password,
+      options: { data: { name: v.name.trim(), phone: v.phone.trim() } },
+    });
+
+    if (error) {
+      btn.disabled = false;
+      return toast(/registered|already/i.test(error.message)
+        ? 'Email sudah terdaftar, silakan masuk' : error.message, false);
+    }
+    if (!data.session) {
+      btn.disabled = false;
+      return toast('Confirm email di Supabase masih aktif, matikan dulu di Authentication → Sign In / Providers → Email', false);
+    }
+
+    // Profil dibuat otomatis oleh trigger di database, lalu langsung masuk dashboard
+    const p = await getProfile(4);
+    location.href = p?.role === 'admin' ? 'admin/dashboard.html' : 'customer/dashboard.html';
+  };
+</script>
 </body>
 </html>

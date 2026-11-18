@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelola Akun – Admin SmartSlot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/env.js"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/app.js"></script>
+</head>
+<body class="invisible">
+  <header id="nav" class="sticky top-0 z-40 bg-cream/80 backdrop-blur border-b border-sand"></header>
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div>
+      <h1 class="text-3xl font-bold">Kelola Akun</h1>
+      <p class="text-sm opacity-70">Naikkan customer menjadi admin, atau turunkan admin menjadi customer.</p>
+    </div>
+
+    <div id="stats" class="grid grid-cols-3 gap-4"></div>
+
+    <section class="card">
+      <div class="flex items-center gap-3 flex-wrap mb-4">
+        <input id="q" class="input !w-auto flex-1 min-w-[12rem]" placeholder="Cari nama, email, atau no. HP" oninput="render()">
+        <select id="filter" class="input !w-auto" onchange="render()">
+          <option value="">Semua role</option>
+          <option value="customer">Customer</option>
+          <option value="admin">Admin</option>
+          <option value="grand">Grand Admin</option>
+        </select>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead><tr><th>Akun</th><th>No. HP</th><th>Role</th><th>Daftar</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let users = [];
+
+    (async () => {
+      await guard('grand');
+      mountNav('admin');
+      load();
+    })();
+
+    async function load() {
+      const { data, error } = await sb.from('profiles')
+        .select('id,name,phone,email,role,is_grand_admin,created_at')
+        .order('created_at', { ascending: false });
+      if (error) return toast(error.message, false);
+      users = data || [];
+      render();
+    }
+
+    const roleBadge = (u) => u.is_grand_admin
+      ? '<span class="px-3 py-1 rounded-full text-xs bg-wine text-cream">Grand Admin</span>'
+      : u.role === 'admin'
+        ? '<span class="px-3 py-1 rounded-full text-xs bg-wine/15 text-wine">Admin</span>'
+        : '<span class="px-3 py-1 rounded-full text-xs bg-sand/60">Customer</span>';
+
+    function render() {
+      const q = $('#q').value.trim().toLowerCase();
+      const f = $('#filter').value;
+
+      const count = (fn) => users.filter(fn).length;
+      $('#stats').innerHTML = [
+        ['Total Akun', users.length],
+        ['Admin', count((u) => u.role === 'admin')],
+        ['Customer', count((u) => u.role === 'customer')],
+      ].map(([t, v]) => `<div class="card"><p class="text-sm opacity-70">${t}</p><p class="font-display text-4xl font-bold">${v}</p></div>`).join('');
+
+      const list = users.filter((u) =>
+        (!f || (f === 'grand' ? u.is_grand_admin : u.role === f)) &&
+        (!q || [u.name, u.email, u.phone].some((x) => (x || '').toLowerCase().includes(q)))
+      );
+
+      $('#rows').innerHTML = list.map((u) => {
+        const locked = u.is_grand_admin || u.id === ME.id;
+        const action = locked
+          ? `<span class="td-muted">${u.id === ME.id && !u.is_grand_admin ? 'Akun Anda' : 'Tidak dapat diubah'}</span>`
+          : u.role === 'customer'
+            ? `<button class="btn btn-primary" onclick="setRole('${u.id}','admin')">Jadikan Admin</button>`
+            : `<button class="btn btn-danger" onclick="setRole('${u.id}','customer')">Jadikan Customer</button>`;
+        return `<tr>
+          <td>
+            <p class="font-medium td-wrap">${esc(u.name)}${u.id === ME.id ? ' (Anda)' : ''}</p>
+            <p class="td-muted">${esc(u.email)}</p>
+          </td>
+          <td class="td-wrap">${esc(u.phone) || '-'}</td>
+          <td>${roleBadge(u)}</td>
+          <td class="td-muted">${fd(u.created_at.slice(0, 10))}</td>
+          <td class="td-actions">${action}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="py-5 text-center opacity-50 text-sm">Tidak ada akun.</td></tr>';
+    }
+
+    async function setRole(id, role) {
+      const u = users.find((x) => x.id === id);
+      const msg = role === 'admin'
+        ? `Jadikan "${u.name}" sebagai ADMIN?`
+        : `Turunkan "${u.name}" menjadi CUSTOMER?`;
+      if (!confirm(msg)) return;
+      const { error } = await sb.rpc('set_user_role', { p_user: id, p_role: role });
+      if (error) return toast(error.message, false);
+      toast('Role berhasil diperbarui');
+      load();
+    }
+  </script>
+</body>
+</html>
