@@ -53,8 +53,6 @@ async function getProfile(retry = 0) {
 /**
  * Route guard.
  * role = 'guest' | 'customer' | 'admin' | 'grand'
- * Jika akses tidak sesuai role → redirect ke halaman yang tepat.
- * Jika sesuai → tampilkan body (hapus class invisible) dan return profile.
  */
 async function guard(role) {
   const p = await getProfile(role === 'guest' ? 0 : 3);
@@ -75,14 +73,8 @@ async function doLogin(email, password, need) {
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) return toast('Email atau password salah', false);
   const p = await getProfile(3);
-  if (!p) {
-    await sb.auth.signOut();
-    return toast('Profil akun tidak ditemukan', false);
-  }
-  if (need === 'admin' && p.role !== 'admin') {
-    await sb.auth.signOut();
-    return toast('Akun ini bukan admin', false);
-  }
+  if (!p) { await sb.auth.signOut(); return toast('Profil akun tidak ditemukan', false); }
+  if (need === 'admin' && p.role !== 'admin') { await sb.auth.signOut(); return toast('Akun ini bukan admin', false); }
   location.href = ROOT + (p.role === 'admin' ? 'admin/dashboard.html' : 'customer/dashboard.html');
 }
 
