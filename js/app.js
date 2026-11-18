@@ -6,6 +6,35 @@ if (window.tailwind) tailwind.config = {
   theme: { extend: { colors: { cream: '#FEF9F3', sand: '#E7B2B5', blush: '#E7B2B5', wine: '#59624F' } } }
 };
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+const $ = (s) => document.querySelector(s);
+// Halaman di sub-folder (admin/ atau customer/) perlu naik satu level ke root
+const ROOT = /\/(admin|customer)\//.test(location.pathname) ? '../' : '';
+
+const DAYS   = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const STATUS = { pending:'Menunggu', approved:'Disetujui', rejected:'Ditolak', cancelled:'Dibatalkan', completed:'Selesai' };
+
+const rupiah = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
+const ico    = (n) => `<img src="${ROOT}assets/icons/${n}.png" alt="${n}" class="w-4 h-4">`;
+const today  = ()  => new Date().toLocaleDateString('sv-SE');
+const hm     = (t) => (t || '').slice(0, 5);
+const fd     = (d) => new Date(d + 'T00:00').toLocaleDateString('id-ID', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+const esc    = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const badge  = (s) => `<span class="px-3 py-1 rounded-full text-xs ${{ pending:'bg-sand', approved:'bg-wine text-cream', rejected:'bg-blush', cancelled:'bg-blush/50', completed:'bg-sand/60' }[s]}">${STATUS[s]}</span>`;
+
+// ─── Toast notification ──────────────────────────────────────────────────────
+function toast(msg, ok = true) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.className = `fixed top-4 right-4 z-[60] px-4 py-2 rounded-full text-sm shadow ${ok ? 'bg-wine text-cream' : 'bg-blush text-wine'}`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ─── Modal helpers ───────────────────────────────────────────────────────────
+const openModal  = (id) => $('#' + id).classList.remove('hidden');
+const closeModal = (id) => $('#' + id).classList.add('hidden');
+
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 let ME = null; // profil user yang sedang login (diisi oleh guard)
 
