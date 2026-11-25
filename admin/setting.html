@@ -18,9 +18,18 @@
     <section class="card">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-xl font-bold">Rekening Uang Jaminan</h2>
-        <button class="btn btn-soft" onclick="editBank()"><img src="../assets/icons/edit.png" alt="edit" class="w-4 h-4"></button>
+        <button id="bankBtn" class="btn btn-soft" style="display:none" onclick="editBank()"><img src="../assets/icons/edit.png" alt="edit" class="w-4 h-4"></button>
       </div>
       <div id="bank"></div>
+      <p id="bankHint" class="text-xs opacity-60 mt-2" style="display:none">Hanya Grand Admin yang dapat mengubah rekening.</p>
+    </section>
+
+    <section class="card">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">Akun Saya</h2>
+        <button class="btn btn-soft" onclick="changePw()">Ganti Password</button>
+      </div>
+      <p id="me" class="text-sm opacity-80"></p>
     </section>
 
     <section class="card">
@@ -64,30 +73,52 @@
 
     (async () => {
       await guard('admin');
-      mountNav('admin');
+      mountNav();
+      if (ME.is_grand_admin) $('#bankBtn').style.display = '';
+      else $('#bankHint').style.display = '';
+      $('#me').textContent = `${ME.name} · ${ME.email || ''}${ME.is_grand_admin ? ' · Grand Admin' : ' · Admin'}`;
       loadAll();
     })();
 
     function loadAll() { loadBank(); loadSvc(); loadHrs(); loadClosed(); }
 
-    // ── Rekening ──
+    // ── Ganti password sendiri ──
+    function changePw() {
+      formModal({
+        title: 'Ganti Password Saya',
+        fields: [
+          { name: 'p1', label: 'Password baru (min. 6 karakter)', type: 'password' },
+          { name: 'p2', label: 'Ulangi password baru', type: 'password' },
+        ],
+        onSubmit: async (v) => {
+          if (v.p1.length < 6) { toast('Password minimal 6 karakter', false); return false; }
+          if (v.p1 !== v.p2) { toast('Ulangi password tidak sama', false); return false; }
+          const { error } = await sb.auth.updateUser({ password: v.p1 });
+          if (error) { toast(error.message, false); return false; }
+          toast('Password berhasil diganti');
+        },
+      });
+    }
+
+    // ── Rekening (hanya grand admin yang bisa ubah) ──
     async function loadBank() {
-      const { data } = await sb.from('payment_settings').select('*').single();
+      const { data } = await sb.from('payment_settings').select('*').maybeSingle();
       bankData = data || {};
       $('#bank').innerHTML = `<p><b>${esc(bankData.bank_name)}</b> ${esc(bankData.account_number)}</p>
         <p class="text-sm">a.n. ${esc(bankData.account_holder)}</p>
         <p class="text-sm opacity-70">${esc(bankData.note)}</p>`;
     }
     function editBank() {
+      if (!ME.is_grand_admin) return toast('Hanya Grand Admin yang dapat mengubah rekening', false);
       formModal({
         title: 'Ubah Rekening', values: bankData,
         fields: [
           { name: 'bank_name', label: 'Bank' },
           { name: 'account_number', label: 'Nomor Rekening' },
           { name: 'account_holder', label: 'Atas Nama' },
-          { name: 'note', label: 'Catatan untuk pelanggan', type: 'textarea' },
+          { name: 'note', label: 'Catatan untuk pelanggan', type: 'textarea', required: false },
         ],
-        onSubmit: (v) => save(sb.from('payment_settings').update({ ...v, updated_at: new Date().toISOString() }).eq('id', 1), loadBank),
+        onSubmit: (v) => save(sb.from('payment_settings').upsert({ id: 1, ...v, updated_at: new Date().toISOString() }), loadBank),
       });
     }
 

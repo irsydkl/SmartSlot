@@ -16,13 +16,14 @@
     <div><label class="label">Email</label><input name="email" type="email" class="input" required></div>
     <div><label class="label">Password</label><input name="password" type="password" class="input" required></div>
     <button class="btn btn-primary w-full justify-center">Masuk</button>
+    <p class="text-sm text-center"><a href="../index.html" class="underline">Kembali ke beranda</a></p>
   </form>
   <script>
     guard('guest');
     $('#f').onsubmit = (e) => {
       e.preventDefault();
       const v = Object.fromEntries(new FormData(e.target));
-      doLogin(v.email, v.password, 'admin');
+      doLogin(v.email, v.password);
     };
   </script>
 </body>

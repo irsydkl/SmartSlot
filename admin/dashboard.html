@@ -25,24 +25,24 @@
   </main>
   <script>
     (async () => {
-      const p = await guard('admin');
-      mountNav('admin');
+      await guard('admin');
+      mountNav();
       const cnt = async (q) => (await q).count;
       const B = () => sb.from('bookings').select('id', { count: 'exact', head: true });
-      const [pend, tod, tot, cus] = await Promise.all([
+      const [pend, tod, tot, done] = await Promise.all([
         cnt(B().eq('status', 'pending')),
         cnt(B().eq('status', 'approved').eq('booking_date', today())),
         cnt(B()),
-        cnt(sb.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'customer')),
+        cnt(B().eq('status', 'completed')),
       ]);
-      $('#stats').innerHTML = [['Menunggu', pend], ['Jadwal Hari Ini', tod], ['Total Booking', tot], ['Pelanggan', cus]]
-        .map(([t, v]) => `<div class="card"><p class="text-sm opacity-70">${t}</p><p class="font-display text-4xl font-bold">${v}</p></div>`).join('');
-      const { data } = await sb.from('bookings').select('*, profiles(name), services(name)')
+      $('#stats').innerHTML = [['Menunggu', pend], ['Jadwal Hari Ini', tod], ['Total Booking', tot], ['Selesai', done]]
+        .map(([t, v]) => `<div class="card"><p class="text-sm opacity-70">${t}</p><p class="font-display text-4xl font-bold">${v ?? 0}</p></div>`).join('');
+      const { data } = await sb.from('bookings').select('*, services(name)')
         .eq('status', 'pending').order('created_at', { ascending: false }).limit(5);
       $('#pending').innerHTML = (data || []).map((b) => `
         <div class="card flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <p class="font-semibold">${esc(b.profiles?.name)} &middot; ${esc(b.services?.name)}</p>
+            <p class="font-semibold">${esc(b.guest_name)} &middot; ${esc(b.services?.name)}</p>
             <p class="text-sm opacity-70">${fd(b.booking_date)} &middot; ${hm(b.start_time)}-${hm(b.end_time)}</p>
           </div>
           ${badge(b.status)}

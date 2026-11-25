@@ -14,8 +14,8 @@
   <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
     <img class="h-[50px]" src="assets/images/SmartSlot.png" alt="SmartSlot">
     <div class="flex gap-2">
-      <a href="login.html" class="btn btn-soft">Masuk</a>
-      <a href="register.html" class="btn btn-primary">Daftar</a>
+      <a href="admin/login.html" class="btn btn-soft">Login Admin</a>
+      <button class="btn btn-primary" onclick="openBooking()">Booking</button>
     </div>
   </header>
 
@@ -23,8 +23,8 @@
     <div>
       <p class="text-sm tracking-widest uppercase opacity-70 mb-3">Beauty &amp; Hair Studio</p>
       <h1 class="text-4xl md:text-6xl font-bold leading-tight mb-5">Tampil anggun, tanpa antre panjang.</h1>
-      <p class="opacity-80 mb-8 max-w-md">Pilih layanan, tentukan jadwal, dan booking online dengan mudah.</p>
-      <a href="register.html" class="btn btn-primary">Booking Sekarang</a>
+      <p class="opacity-80 mb-8 max-w-md">Pilih layanan, tentukan jadwal, dan booking online dengan mudah tanpa perlu daftar akun.</p>
+      <button class="btn btn-primary" onclick="openBooking()">Booking Sekarang</button>
     </div>
     <img src="assets/images/display.jpg" class="rounded-[2rem] bg-sand aspect-[4/3] object-cover" alt="Salon">
   </section>
@@ -39,22 +39,81 @@
     <div id="hours" class="card grid sm:grid-cols-2 gap-x-10 gap-y-2 text-sm"></div>
   </section>
 
+  <section class="max-w-6xl mx-auto px-4 py-10">
+    <h2 class="text-3xl font-bold mb-2">Cek Status Booking</h2>
+    <p class="text-sm opacity-70 mb-4">Masukkan kode booking dan nomor HP yang Anda gunakan saat booking.</p>
+    <form id="tf" class="card grid sm:grid-cols-3 gap-3 items-end">
+      <div><label class="label">Kode Booking</label><input id="t_code" class="input uppercase" placeholder="contoh: A1B2C3D4" required></div>
+      <div><label class="label">Nomor HP</label><input id="t_phone" type="tel" class="input" required></div>
+      <button class="btn btn-primary justify-center">Cek Status</button>
+    </form>
+    <div id="t_result" class="space-y-3 mt-4"></div>
+  </section>
+
   <footer class="text-center text-sm opacity-70 py-8">
     &copy; SmartSlot &middot; <a href="admin/login.html" class="underline">Admin</a>
   </footer>
 
+  <!-- Modal booking -->
+  <div id="m" class="modal hidden">
+    <div>
+      <h3 class="text-2xl font-bold mb-4">Booking Baru</h3>
+      <form id="f" class="space-y-3">
+        <div><label class="label">Nama lengkap</label><input id="guest_name" class="input" maxlength="80" required></div>
+        <div><label class="label">Nomor HP / WhatsApp</label><input id="guest_phone" type="tel" class="input" placeholder="08xxxxxxxxxx" required></div>
+        <div><label class="label">Email (opsional)</label><input id="guest_email" type="email" class="input"></div>
+        <div><label class="label">Layanan</label><select id="service_id" class="input" required></select></div>
+        <div><label class="label">Tanggal</label><input id="booking_date" type="date" class="input" required></div>
+        <div>
+          <label class="label">Jam</label>
+          <div id="slots" class="flex flex-wrap gap-2"></div>
+          <input type="hidden" id="start_time">
+        </div>
+        <div><label class="label">Catatan (opsional)</label><textarea id="notes" rows="2" class="input"></textarea></div>
+        <div class="card text-sm space-y-1">
+          <p>Uang jaminan (50%): <b id="dep">Rp 0</b></p>
+          <p id="bank_info" class="opacity-80"></p>
+        </div>
+        <div><label class="label">Bukti transfer (screenshot, maks 5 MB)</label><input id="proof" type="file" accept="image/*" class="input"></div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn btn-soft" onclick="closeModal('m')">Batal</button>
+          <button id="submitBtn" class="btn btn-primary">Kirim Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal sukses -->
+  <div id="ok" class="modal hidden">
+    <div class="text-center space-y-4">
+      <h3 class="text-2xl font-bold">Booking Terkirim</h3>
+      <p class="text-sm opacity-80">Booking Anda menunggu persetujuan admin. Simpan kode berikut untuk mengecek status:</p>
+      <p id="code" class="font-display text-4xl font-bold tracking-widest"></p>
+      <p class="text-xs opacity-60">Cek status di bagian "Cek Status Booking" dengan kode ini dan nomor HP Anda.</p>
+      <button class="btn btn-primary" onclick="closeModal('ok')">Tutup</button>
+    </div>
+  </div>
+
   <script>
+    let services = [], bankData = {};
+
+    // ── Muat data publik ──
     (async () => {
-      const [s, h] = await Promise.all([
+      const [s, h, b] = await Promise.all([
         sb.from('services').select('*').eq('is_active', true).order('price'),
         sb.from('operating_hours').select('*'),
+        sb.from('payment_settings').select('*').maybeSingle(),
       ]);
-      $('#services').innerHTML = (s.data || []).map((x) => `
+      services = s.data || [];
+      bankData = b.data || {};
+
+      $('#services').innerHTML = services.map((x) => `
         <div class="card">
           <h3 class="text-xl font-bold">${esc(x.name)}</h3>
           <p class="text-sm opacity-80 my-2">${esc(x.description)}</p>
           <p class="font-semibold">${rupiah(x.price)} <span class="font-normal text-sm opacity-70">&middot; ${x.duration_minutes} menit</span></p>
         </div>`).join('');
+
       // Urutkan Senin → Minggu
       const hours = (h.data || []).sort((a, b) => ((a.day_of_week + 6) % 7) - ((b.day_of_week + 6) % 7));
       $('#hours').innerHTML = hours.map((d) => `
@@ -62,7 +121,112 @@
           <span>${DAYS[d.day_of_week]}</span>
           <span>${d.is_open ? hm(d.open_time) + ' - ' + hm(d.close_time) : 'Tutup'}</span>
         </div>`).join('');
+
+      $('#service_id').innerHTML = '<option value="">Pilih layanan</option>' +
+        services.map((x) => `<option value="${x.id}">${esc(x.name)} - ${rupiah(x.price)} (${x.duration_minutes} mnt)</option>`).join('');
+      $('#bank_info').innerHTML = `Transfer ke <b>${esc(bankData.bank_name)} ${esc(bankData.account_number)}</b> a.n. ${esc(bankData.account_holder)}<br>${esc(bankData.note)}`;
+      $('#booking_date').min = today();
     })();
+
+    // ── Form booking ──
+    function openBooking() {
+      $('#f').reset();
+      $('#start_time').value = '';
+      $('#slots').innerHTML = '<p class="text-sm opacity-60">Pilih layanan dan tanggal dulu.</p>';
+      $('#dep').textContent = rupiah(0);
+      openModal('m');
+    }
+
+    function showDep() {
+      const s = services.find((x) => x.id === $('#service_id').value);
+      $('#dep').textContent = rupiah(Math.round((s?.price || 0) * 0.5));
+    }
+
+    async function slots() {
+      const box = $('#slots'), date = $('#booking_date').value;
+      const s = services.find((x) => x.id === $('#service_id').value);
+      $('#start_time').value = '';
+      if (!date || !s) { box.innerHTML = '<p class="text-sm opacity-60">Pilih layanan dan tanggal dulu.</p>'; return; }
+      const [c, h, bk] = await Promise.all([
+        sb.from('closed_dates').select('closed_date').eq('closed_date', date).maybeSingle(),
+        sb.from('operating_hours').select('*').eq('day_of_week', new Date(date + 'T00:00').getDay()).maybeSingle(),
+        sb.rpc('get_booked_slots', { p_date: date }),
+      ]);
+      if (c.data || !h.data?.is_open) { box.innerHTML = '<p class="text-sm">Salon tutup pada tanggal ini.</p>'; return; }
+      const mins = (t) => +t.slice(0, 2) * 60 + +t.slice(3, 5);
+      const busy = (bk.data || []).map((b) => [mins(b.start_time), mins(b.end_time)]);
+      const nowM = new Date().getHours() * 60 + new Date().getMinutes();
+      let out = '';
+      for (let t = mins(h.data.open_time); t + s.duration_minutes <= mins(h.data.close_time); t += 30) {
+        if (date === today() && t <= nowM) continue;
+        if (busy.some(([a, e]) => t < e && t + s.duration_minutes > a)) continue;
+        const l = String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+        out += `<button type="button" data-t="${l}" class="slot btn btn-soft">${l}</button>`;
+      }
+      box.innerHTML = out || '<p class="text-sm">Tidak ada jam tersedia.</p>';
+    }
+
+    $('#service_id').onchange = () => { showDep(); slots(); };
+    $('#booking_date').onchange = () => slots();
+    $('#slots').onclick = (e) => {
+      const btn = e.target.closest('.slot');
+      if (!btn) return;
+      $('#start_time').value = btn.dataset.t;
+      document.querySelectorAll('.slot').forEach((x) => (x.className = 'slot btn btn-soft'));
+      btn.className = 'slot btn btn-primary';
+    };
+
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      if (!$('#start_time').value) return toast('Pilih jam dulu', false);
+      const file = $('#proof').files[0];
+      if (!file) return toast('Upload bukti transfer uang jaminan', false);
+      if (file.size > 5 * 1024 * 1024) return toast('Ukuran gambar maksimal 5 MB', false);
+
+      const btn = $('#submitBtn');
+      btn.disabled = true;
+
+      const path = `guest/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name.replace(/[^\w.\-]/g, '_')}`;
+      const up = await sb.storage.from('deposit-proofs').upload(path, file);
+      if (up.error) { btn.disabled = false; return toast(up.error.message, false); }
+
+      const { data, error } = await sb.rpc('create_booking', {
+        p_name: $('#guest_name').value,
+        p_phone: $('#guest_phone').value,
+        p_email: $('#guest_email').value,
+        p_service: $('#service_id').value,
+        p_date: $('#booking_date').value,
+        p_start: $('#start_time').value,
+        p_notes: $('#notes').value,
+        p_proof: path,
+      });
+      btn.disabled = false;
+      if (error) return toast(error.message, false);
+
+      closeModal('m');
+      $('#code').textContent = data;
+      openModal('ok');
+    };
+
+    // ── Cek status booking ──
+    $('#tf').onsubmit = async (e) => {
+      e.preventDefault();
+      const { data, error } = await sb.rpc('track_booking', {
+        p_code: $('#t_code').value,
+        p_phone: $('#t_phone').value,
+      });
+      if (error) return toast(error.message, false);
+      $('#t_result').innerHTML = (data || []).map((b) => `
+        <div class="card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p class="font-semibold">${esc(b.service_name)} <span class="text-xs opacity-60">#${esc(b.code)}</span></p>
+            <p class="text-sm opacity-70">${fd(b.booking_date)} &middot; ${hm(b.start_time)}-${hm(b.end_time)}</p>
+            <p class="text-sm">Jaminan: ${rupiah(b.deposit_amount)}</p>
+            ${b.admin_note ? `<p class="text-sm italic">Catatan admin: ${esc(b.admin_note)}</p>` : ''}
+          </div>
+          ${badge(b.status)}
+        </div>`).join('') || '<p class="text-sm opacity-70">Booking tidak ditemukan. Periksa kode dan nomor HP.</p>';
+    };
   </script>
 </body>
 </html>

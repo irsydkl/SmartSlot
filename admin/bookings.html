@@ -43,12 +43,12 @@
     </section>
   </main>
   <script>
-    const SEL = 'id,booking_date,start_time,end_time,status,admin_note,deposit_amount,deposit_proof_url,profiles(name,phone),services(name)';
+    const SEL = 'id,booking_date,start_time,end_time,status,notes,admin_note,deposit_amount,deposit_proof_url,guest_name,guest_phone,guest_email,services(name)';
     let rows = [];
 
     (async () => {
       await guard('admin');
-      mountNav('admin');
+      mountNav();
       load();
     })();
 
@@ -62,17 +62,20 @@
       ]);
       $('#today').innerHTML = (t.data || []).map((b) => `<tr>
         <td><span class="font-mono text-sm">${hm(b.start_time)} – ${hm(b.end_time)}</span></td>
-        <td class="td-wrap font-medium">${esc(b.profiles?.name)}</td>
-        <td class="td-wrap">${esc(b.profiles?.phone)}</td>
+        <td class="td-wrap font-medium">${esc(b.guest_name)}</td>
+        <td class="td-wrap">${esc(b.guest_phone)}</td>
         <td class="td-wrap">${esc(b.services?.name)}</td>
       </tr>`).join('') || '<tr><td colspan="4" class="py-5 text-center opacity-50 text-sm">Belum ada jadwal hari ini.</td></tr>';
       rows = a.data || [];
       $('#all').innerHTML = rows.map((b) => `<tr>
         <td>
-          <p class="font-medium td-wrap">${esc(b.profiles?.name)}</p>
-          <p class="td-muted">${esc(b.profiles?.phone)}</p>
+          <p class="font-medium td-wrap">${esc(b.guest_name)}</p>
+          <p class="td-muted">${esc(b.guest_phone)}${b.guest_email ? ' · ' + esc(b.guest_email) : ''}</p>
         </td>
-        <td class="td-wrap">${esc(b.services?.name)}</td>
+        <td>
+          <p class="td-wrap">${esc(b.services?.name)}</p>
+          ${b.notes ? `<p class="td-muted td-wrap">Catatan: ${esc(b.notes)}</p>` : ''}
+        </td>
         <td>
           <p>${fd(b.booking_date)}</p>
           <p class="td-muted font-mono">${hm(b.start_time)} – ${hm(b.end_time)}</p>

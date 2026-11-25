@@ -8,8 +8,8 @@ if (window.tailwind) tailwind.config = {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const $ = (s) => document.querySelector(s);
-// Halaman di sub-folder (admin/ atau customer/) perlu naik satu level ke root
-const ROOT = /\/(admin|customer)\//.test(location.pathname) ? '../' : '';
+// Halaman di folder admin/ perlu naik satu level ke root
+const ROOT = /\/admin\//.test(location.pathname) ? '../' : '';
 
 const DAYS   = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
 const STATUS = { pending:'Menunggu', approved:'Disetujui', rejected:'Ditolak', cancelled:'Dibatalkan', completed:'Selesai' };
@@ -28,17 +28,16 @@ function toast(msg, ok = true) {
   t.textContent = msg;
   t.className = `fixed top-4 right-4 z-[60] px-4 py-2 rounded-full text-sm shadow ${ok ? 'bg-wine text-cream' : 'bg-blush text-wine'}`;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), 3500);
 }
 
 // ─── Modal helpers ───────────────────────────────────────────────────────────
 const openModal  = (id) => $('#' + id).classList.remove('hidden');
 const closeModal = (id) => $('#' + id).classList.add('hidden');
 
-// ─── Auth helpers ────────────────────────────────────────────────────────────
-let ME = null; // profil user yang sedang login (diisi oleh guard)
+// ─── Auth helpers (hanya admin) ──────────────────────────────────────────────
+let ME = null; // profil admin yang sedang login (diisi oleh guard)
 
-// retry = berapa kali coba ulang jika profil belum terbentuk oleh trigger
 async function getProfile(retry = 0) {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return null;
@@ -52,16 +51,21 @@ async function getProfile(retry = 0) {
 
 /**
  * Route guard.
- * role = 'guest' | 'customer' | 'admin' | 'grand'
+ * role = 'guest' (halaman login) | 'admin' | 'grand' (khusus grand admin)
  */
 async function guard(role) {
   const p = await getProfile(role === 'guest' ? 0 : 3);
-  const home = p?.role === 'admin' ? 'admin/dashboard.html' : 'customer/dashboard.html';
   let to = null;
-  if      (role === 'guest'    && p)                       to = home;
-  else if (role === 'customer' && p?.role !== 'customer')  to = p ? home : 'login.html';
-  else if (role === 'admin'    && p?.role !== 'admin')     to = p ? home : 'admin/login.html';
-  else if (role === 'grand'    && !(p?.role === 'admin' && p.is_grand_admin)) to = p ? home : 'admin/login.html';
+  if (role === 'guest') {
+    if (p?.role === 'admin') to = 'admin/dashboard.html';
+  } else if (!p) {
+    to = 'admin/login.html';
+  } else if (p.role !== 'admin') {
+    await sb.auth.signOut();
+    to = 'index.html';
+  } else if (role === 'grand' && !p.is_grand_admin) {
+    to = 'admin/dashboard.html';
+  }
   if (to) { location.replace(ROOT + to); return new Promise(() => {}); }
   ME = p;
   document.body.classList.remove('invisible');
@@ -69,13 +73,12 @@ async function guard(role) {
 }
 
 // ─── Login / Logout ──────────────────────────────────────────────────────────
-async function doLogin(email, password, need) {
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+async function doLogin(email, password) {
+  const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
   if (error) return toast('Email atau password salah', false);
   const p = await getProfile(3);
-  if (!p) { await sb.auth.signOut(); return toast('Profil akun tidak ditemukan', false); }
-  if (need === 'admin' && p.role !== 'admin') { await sb.auth.signOut(); return toast('Akun ini bukan admin', false); }
-  location.href = ROOT + (p.role === 'admin' ? 'admin/dashboard.html' : 'customer/dashboard.html');
+  if (!p || p.role !== 'admin') { await sb.auth.signOut(); return toast('Akun ini bukan admin', false); }
+  location.href = ROOT + 'admin/dashboard.html';
 }
 
 async function logout() {
@@ -108,12 +111,10 @@ function confirmLogout() {
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
 }
 
-// ─── Navbar ──────────────────────────────────────────────────────────────────
-function mountNav(role) {
-  const links = role === 'admin'
-    ? [['dashboard.html','Dashboard'],['bookings.html','Booking'],['setting.html','Setting'],
-       ...(ME?.is_grand_admin ? [['users.html','Kelola Akun']] : [])]
-    : [['dashboard.html','Dashboard'],['bookings.html','Booking Saya']];
+// ─── Navbar admin ────────────────────────────────────────────────────────────
+function mountNav() {
+  const links = [['dashboard.html','Dashboard'],['bookings.html','Booking'],['setting.html','Setting'],
+    ...(ME?.is_grand_admin ? [['users.html','Kelola Admin']] : [])];
   const cur = location.pathname.split('/').pop();
   $('#nav').innerHTML = `<div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
     <img class="h-[50px]" src="${ROOT}assets/images/SmartSlot.png" alt="SmartSlot">
